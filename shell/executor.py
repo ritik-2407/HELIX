@@ -1,46 +1,99 @@
+#!/usr/bin/env python
+
+
+
+# ================== IMPORTS ==================
+
 import subprocess
 import shlex
 import os
+import sys
+
+from commands.builtin import BUILTIN_COMMANDS
+from commands.custom import CUSTOM_COMMANDS
+from commands.aliases import ALIASES
+
+# ================== STATE ==================
 
 class ShellState:
-                                    #this part just holds the state or  contains current working direcotry(cwd)
+    # Holds shell state (currently only cwd)
     def __init__(self):
-        self.cwd = os.getcwd()      #just abject which holds the current working direcotry
+        self.cwd = os.getcwd()
 
 state = ShellState()
 
 
-def execute_command(command : str):
-    try:
-        args = shlex.split(command)
-        cmd = args[0]
 
-        if cmd == 'cd':
-            change_directory(args)
-            return 
+# ================== ROUTER ==================
 
-        subprocess.run(
-            args,
-            cwd=state.cwd,          #whenever subprocess runs a command , run in this cwd , this is to ensure that after cd in the future , the command runs in that direcotry not this one
-            shell=False
-        )
+def dispatch_command(args, state):
+    cmd = args[0]
 
-    except FileNotFoundError:
-        print(f"command not found: {args[0]}")
-    except Exception as e:
-        print(f"error: {e}")
-
-
-def change_directory(args):
-    if len(args) == 1:
-        target = os.path.expanduser("~")
-    else:
-        target = args[1]
-
-    new_path = os.path.abspath(os.path.join(state.cwd, target))
-
-    if not os.path.isdir(new_path):
-        print(f"cd: no such directory: {target}")
+    # Built-in commands
+    if cmd in BUILTIN_COMMANDS:
+        BUILTIN_COMMANDS[cmd](args, state)
         return
 
-    state.cwd = new_path
+    # Custom commands
+    if cmd in CUSTOM_COMMANDS:
+        CUSTOM_COMMANDS[cmd](args, state)
+        return
+
+    # OS-level commands
+    subprocess.run(
+        args,
+        cwd=state.cwd,
+        shell=False
+    )
+
+# ================== ALIASES ==================
+
+def expand_alias(command: str) -> str:
+    parts = shlex.split(command)
+    if not parts:
+        return command
+
+    cmd = parts[0]
+    if cmd not in ALIASES:
+        return command
+
+    expanded = ALIASES[cmd]
+    rest = parts[1:]
+
+    return " ".join([expanded] + rest)
+
+# ================== EXECUTOR ==================
+
+def execute_command(command: str):
+    try:
+        command = expand_alias(command)
+        args = shlex.split(command)
+        if not args:
+            return
+
+        dispatch_command(args, state)
+
+    except FileNotFoundError:
+        print(f"{RED}command not found:{RESET} {args[0]}")
+    except KeyboardInterrupt:
+        print()
+    except Exception as e:
+        print(f"{RED}error:{RESET} {e}")
+
+# ================== MAIN LOOP ==================
+
+def main():
+    show_banner()
+
+    while True:
+        try:
+            command = input(get_prompt(state))
+            execute_command(command)
+        except EOFError:
+            print("\nExiting Helix...")
+            break
+
+# ================== ENTRY ==================
+
+if __name__ == "__main__":
+    main()
