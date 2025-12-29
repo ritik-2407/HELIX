@@ -1,13 +1,16 @@
 import sys
 from shell.executor import execute_command, state
 from shell.ui import show_banner, get_prompt
+from rich.console import Console
+
+console = Console()
 
 def start_repl():
     show_banner()
 
     while True:
         try:
-            raw = input(get_prompt(state)).strip()
+            raw = console.input(get_prompt(state)).strip()
 
             if not raw:
                 continue
